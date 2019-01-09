@@ -39,7 +39,8 @@ def rnn(rnn_type, inputs, length, hidden_size, layer_num=1, dropout_keep_prob=No
     """
     if not rnn_type.startswith('bi'):
         cell = get_cell(rnn_type, hidden_size, layer_num, dropout_keep_prob)
-        outputs, states = tf.nn.dynamic_rnn(cell, inputs, sequence_length=length, dtype=tf.float32)
+        # outputs, states = tf.nn.dynamic_rnn(cell, inputs, sequence_length=length, dtype=tf.float32)
+        outputs, states = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)
         if rnn_type.endswith('lstm'):
             c = [state.c for state in states]
             h = [state.h for state in states]

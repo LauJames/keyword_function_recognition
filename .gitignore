@@ -13,3 +13,5 @@ gen
 /bert/KFR_excel_result/
 !/data/count_stat.py
 !/data/data_loader.py
+/tensorboard_dir/
+/checkpoints/
