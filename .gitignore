@@ -1,0 +1,15 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Example user template template
+### Example user template
+
+# IntelliJ project files
+.idea
+*.iml
+out
+gen
+/data/
+!/data/read_pico.py
+/bert_model/chinese_L-12_H-768_A-12/
+/bert/KFR_excel_result/
+!/data/count_stat.py
+!/data/data_loader.py
