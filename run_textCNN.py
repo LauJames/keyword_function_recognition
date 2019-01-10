@@ -6,8 +6,8 @@
 @Author   : Lau James
 @Contact  : LauJames2017@whu.edu.cn
 @Project  : keyword_function_recognition 
-@File     : run_textRNN.py
-@Time     : 19-1-9 下午3:03
+@File     : run_textCNN.py
+@Time     : 19-1-10 下午8:50
 @Software : PyCharm
 @Copyright: "Copyright (c) 2018 Lau James. All Rights Reserved"
 """
@@ -24,12 +24,12 @@ import csv
 import logging
 import jieba
 from sklearn import metrics
-from model.textRNN import TextRNN
+from model.textCNN import TextCNN
 from data.data_loader import get_abskw_label, split_data, load_pkl_set, batch_iter_per_epoch_mask, batch_iter_per_epoch
 
 
 def parse_args():
-    parser = argparse.ArgumentParser('RNN model for keywords function recognition task')
+    parser = argparse.ArgumentParser('CNN model for keywords function recognition task')
     parser.add_argument('--prepare', action='store_true',
                         help='create the directories, prepare the vocab and embeddings')
     parser.add_argument('--train', action='store_true',
@@ -44,6 +44,7 @@ def parse_args():
     train_settings.add_argument('--optim', default='adam', help='optimizer type')
     train_settings.add_argument('--learning_rate', type=float, default=0.0008, help='optimizer type')
     train_settings.add_argument('--weight_dacay', type=float, default=0, help='weight decay')
+    train_settings.add_argument('--l2_reg_lambda', type=float, default=0.0, help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=0.6, help='dropout keep prob')
     train_settings.add_argument('--batch_size', type=int, default=64, help='train batch size')
     train_settings.add_argument('--epochs', type=int, default=100, help='train epochs')
@@ -55,14 +56,12 @@ def parse_args():
                                 help='number of checkpoints to store')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--rnn_type', choices=['lstm', 'gru', 'rnn'], default='gru',
-                                help='choose the algorithm to use')
-    model_settings.add_argument('--embedding_dim', type=int, default=300,
+    model_settings.add_argument('--embedding_dim', type=int, default=256,
                                 help='size of the embeddings')
-    model_settings.add_argument('--hidden_size', type=int, default=64,
-                                help='size of rnn hidden units')
-    model_settings.add_argument('--num_layers', type=int, default=4,
-                                help='RNN layer num')
+    model_settings.add_argument('--filter_sizes', type=str, default="3,4,5",
+                                help='comma split filter sizes')
+    model_settings.add_argument('--num_filters', type=int, default=128,
+                                help='CNN filter nums')
     model_settings.add_argument('--max_x_len', type=int, default=215,
                                 help='max length of question')
     model_settings.add_argument('--num_classes', type=int, default=3,
@@ -74,14 +73,14 @@ def parse_args():
                                # default='./data/test.txt',
                                help='list of files that contain the raw data')
     path_settings.add_argument('--pkl_files',
-                               default='./data/KFR_split_data.pkl',
+                               default='./data/KFR_split_data_unmask.pkl',
                                # default='./data/test.txt',
                                help='list of files that contain the pkl data')
     # path_settings.add_argument('--test_data_files',
     #                            default='./data/testset.txt')
-    path_settings.add_argument('--tensorboard_dir', default='tensorboard_dir/textRNN_GRU_reg_4layer',
+    path_settings.add_argument('--tensorboard_dir', default='tensorboard_dir/textCNN',
                                help='saving path of tensorboard')
-    path_settings.add_argument('--save_dir', default='checkpoints/textRNN_GRU_reg_4layer',
+    path_settings.add_argument('--save_dir', default='checkpoints/textCNN',
                                help='save base dir')
     path_settings.add_argument('--log_path',
                                help='path of the log file. If not set, logs are printed to console')
@@ -101,38 +100,31 @@ def get_time_dif(start_time):
     return datetime.timedelta(seconds=int(round(time_diff)))
 
 
-def feed_data(x_batch, x_mask_batch, y_batch, keep_prob, model):
-# def feed_data(x_batch, y_batch, keep_prob, model):
+def feed_data(x_batch, y_batch, keep_prob, model):
     feed_dict = {
         model.input_x: x_batch,
-        model.mask_len: x_mask_batch,
         model.input_y: y_batch,
         model.dropout_keep_prob: keep_prob
     }
     return feed_dict
 
 
-def evaluate(x_dev, x_mask_dev, y_dev, sess, model):
-# def evaluate(x_dev, y_dev, sess, model):
+def evaluate(x_dev, y_dev, sess, model):
     """
     Evaluate model on a dev set
     :param x_dev:
-    :param x_mask_dev:
     :param y_dev:
     :param sess:
     :param model:
     :return:
     """
     data_len = len(y_dev)
-    batch_eval = batch_iter_per_epoch_mask(x_dev, x_mask_dev, y_dev, shuffle=False)
-    # batch_eval = batch_iter_per_epoch(x_dev, y_dev, shuffle=False)
+    batch_eval = batch_iter_per_epoch(x_dev, y_dev, shuffle=False)
     total_loss = 0.0
     total_acc = 0.0
-    for x_batch_eval, x_mask_batch_eval, y_batch_eval in batch_eval:
-    # for x_batch_eval, y_batch_eval in batch_eval:
+    for x_batch_eval, y_batch_eval in batch_eval:
         batch_len = len(y_batch_eval)
-        feed_dict = feed_data(x_batch_eval, x_mask_batch_eval, y_batch_eval, keep_prob=1.0, model=model)
-        # feed_dict = feed_data(x_batch_eval, y_batch_eval, keep_prob=1.0, model=model)
+        feed_dict = feed_data(x_batch_eval, y_batch_eval, keep_prob=1.0, model=model)
         loss, accuracy = sess.run([model.loss, model.accuracy], feed_dict)
         total_loss += loss * batch_len
         total_acc += accuracy * batch_len
@@ -166,8 +158,7 @@ def prepare():
     vocab_processor.save(os.path.join(args.save_dir, "vocab"))
 
     # split
-    split_data(args.raw_files, os.path.join(args.save_dir, "vocab"), args.pkl_files, mask=True)
-    # split_data(args.raw_files, os.path.join(args.save_dir, "vocab"), args.pkl_files)
+    split_data(args.raw_files, os.path.join(args.save_dir, "vocab"), args.pkl_files)
 
     time_dif = get_time_dif(start_time)
     print('Vocab processing time usage:', time_dif)
@@ -183,12 +174,9 @@ def train():
     # Load data
     print('Loading data ...')
     start_time = time.time()
-    x_train, y_train, x_dev, y_dev, x_test, y_test, vocab_size, x_mask_train, x_mask_dev, x_mask_test = load_pkl_set(
-        args.pkl_files, mask=True)
-    # x_train, y_train, x_dev, y_dev, x_test, y_test, vocab_size = load_pkl_set(args.pkl_files)
+    x_train, y_train, x_dev, y_dev, x_test, y_test, vocab_size = load_pkl_set(args.pkl_files)
 
-    del x_test, x_mask_test, y_test
-    # del x_test, y_test
+    del x_test, y_test
 
     time_dif = get_time_dif(start_time)
     print('Time usage:', time_dif)
@@ -199,14 +187,14 @@ def train():
         os.makedirs(tensorboard_dir)
 
     # TextRNN model init
-    model = TextRNN(
+    model = TextCNN(
         sequence_length=args.max_x_len,
         num_classes=args.num_classes,
         embedding_dim=args.embedding_dim,
         vocab_size=vocab_size,
-        num_layers=args.num_layers,
-        hidden_dim=args.hidden_size,
-        rnn_type=args.rnn_type,
+        filter_sizes=list(map(int, args.filter_sizes.split(","))),
+        num_filters=args.num_filters,
+        l2_reg_lambda=args.l2_reg_lambda,
         learning_rate=args.learning_rate
     )
 
@@ -222,7 +210,17 @@ def train():
         os.makedirs(args.save_dir)
 
     # Create Session
-    session = tf.Session()
+    # Create Session
+    gpu_options = tf.GPUOptions(
+        per_process_gpu_memory_fraction=0.5,
+        allow_growth=True
+    )
+    session_config = tf.ConfigProto(
+        allow_soft_placement=args.allow_soft_placement,
+        log_device_placement=args.log_device_placement,
+        gpu_options=gpu_options
+    )
+    session = tf.Session(config=session_config)
     session.run(tf.global_variables_initializer())
     writer.add_graph(session.graph)
 
@@ -236,12 +234,9 @@ def train():
     tag = False
     for epoch in range(args.epochs):
         print('Epoch:', epoch + 1)
-        batch_train = batch_iter_per_epoch_mask(x_train, x_mask_train, y_train, args.batch_size)
-        # batch_train = batch_iter_per_epoch(x_train, y_train, args.batch_size)
-        # for x_batch, y_batch in batch_train:
-        for x_batch, x_mask_batch, y_batch in batch_train:
-            feed_dict = feed_data(x_batch, x_mask_batch, y_batch, args.dropout_keep_prob, model=model)
-            # feed_dict = feed_data(x_batch, y_batch, args.dropout_keep_prob, model=model)
+        batch_train = batch_iter_per_epoch(x_train, y_train, args.batch_size)
+        for x_batch, y_batch in batch_train:
+            feed_dict = feed_data(x_batch, y_batch, args.dropout_keep_prob, model=model)
             if total_batch % args.checkpoint_every == 0:
                 # write to tensorboard scalar
                 summary = session.run(merged_summary, feed_dict)
@@ -251,8 +246,7 @@ def train():
                 # print performance on train set and dev set
                 feed_dict[model.dropout_keep_prob] = 1.0
                 loss_train, acc_train = session.run([model.loss, model.accuracy], feed_dict=feed_dict)
-                loss_dev, acc_dev = evaluate(x_dev, x_mask_dev, y_dev, session, model=model)
-                # loss_dev, acc_dev = evaluate(x_dev, y_dev, session, model=model)
+                loss_dev, acc_dev = evaluate(x_dev, y_dev, session, model=model)
 
                 if acc_dev > best_acc_dev:
                     # save best result
@@ -283,22 +277,19 @@ def train():
 def predict():
     print('Loading test data ...')
     start_time = time.time()
-    x_train, y_train, x_dev, y_dev, x_test, y_test, vocab_size, x_mask_train, x_mask_dev, x_mask_test = load_pkl_set(
-        args.pkl_files, mask=True)
-    # x_train, y_train, x_dev, y_dev, x_test, y_test, vocab_size = load_pkl_set(args.pkl_files)
+    x_train, y_train, x_dev, y_dev, x_test, y_test, vocab_size = load_pkl_set(args.pkl_files)
 
-    del x_train, x_mask_train, y_train, x_dev, x_mask_dev, y_dev
-    # del x_train, y_train, x_dev, y_dev
+    del x_train, y_train, x_dev, y_dev
 
     # TextRNN model init
-    model = TextRNN(
+    model = TextCNN(
         sequence_length=args.max_x_len,
         num_classes=args.num_classes,
         embedding_dim=args.embedding_dim,
         vocab_size=vocab_size,
-        num_layers=args.num_layers,
-        hidden_dim=args.hidden_size,
-        rnn_type=args.rnn_type,
+        filter_sizes=list(map(int, args.filter_sizes.split(","))),
+        num_filters=args.num_filters,
+        l2_reg_lambda=args.l2_reg_lambda,
         learning_rate=args.learning_rate
     )
 
@@ -308,21 +299,18 @@ def predict():
     saver.restore(session, save_path=save_path)
 
     print('Testing ...')
-    loss_test, acc_test = evaluate(x_test, x_mask_test, y_test, session, model=model)
-    # loss_test, acc_test = evaluate(x_test, y_test, session, model=model)
+    loss_test, acc_test = evaluate(x_test, y_test, session, model=model)
     print('Test loss:{0:>6.2}, Test acc:{1:7.2%}'.format(loss_test, acc_test))
 
-    test_batches = batch_iter_per_epoch_mask(x_test, x_mask_test, y_test, shuffle=False)
-    # test_batches = batch_iter_per_epoch(x_test, y_test, shuffle=False)
+    test_batches = batch_iter_per_epoch(x_test, y_test, shuffle=False)
     all_predictions = []
     all_predict_prob = []
     count = 0  # concatenate第一次不能为空，需要一个判断来赋all_predict_prob
-    for x_test_batch, x_mask_test_batch, y_test_batch in test_batches:
-    # for x_test_batch, y_test_batch in test_batches:
+    for x_test_batch, y_test_batch in test_batches:
         batch_predictions, batch_predict_probs = session.run([model.y_pred, model.probs],
                                                              feed_dict={
                                                                  model.input_x: x_test_batch,
-                                                                 model.mask_len: x_mask_test_batch,
+                                                                 # model.mask_len: x_mask_test_batch,
                                                                  model.dropout_keep_prob: 1.0
                                                              })
         all_predictions = np.concatenate([all_predictions, batch_predictions])
