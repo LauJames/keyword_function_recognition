@@ -42,7 +42,7 @@ def parse_args():
     train_settings.add_argument('--dev_sample_percentage', type=float, default=0.05,
                                 help='percentage of the training data to use for validation')
     train_settings.add_argument('--optim', default='adam', help='optimizer type')
-    train_settings.add_argument('--learning_rate', type=float, default=0.0003, help='optimizer type')
+    train_settings.add_argument('--learning_rate', type=float, default=0.0005, help='optimizer type')
     train_settings.add_argument('--weight_dacay', type=float, default=0, help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=0.6, help='dropout keep prob')
     train_settings.add_argument('--batch_size', type=int, default=64, help='train batch size')
@@ -59,9 +59,9 @@ def parse_args():
                                 help='choose the algorithm to use')
     model_settings.add_argument('--embedding_dim', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--hidden_size', type=int, default=64,
+    model_settings.add_argument('--hidden_size', type=int, default=128,
                                 help='size of rnn hidden units')
-    model_settings.add_argument('--num_layers', type=int, default=4,
+    model_settings.add_argument('--num_layers', type=int, default=2,
                                 help='RNN layer num')
     model_settings.add_argument('--max_x_len', type=int, default=215,
                                 help='max length of question')
@@ -79,9 +79,9 @@ def parse_args():
                                help='list of files that contain the pkl data')
     # path_settings.add_argument('--test_data_files',
     #                            default='./data/testset.txt')
-    path_settings.add_argument('--tensorboard_dir', default='tensorboard_dir/textRNN_GRU_reg_4layer',
+    path_settings.add_argument('--tensorboard_dir', default='tensorboard_dir/textRNN_GRU_reg',
                                help='saving path of tensorboard')
-    path_settings.add_argument('--save_dir', default='checkpoints/textRNN_GRU_reg_4layer',
+    path_settings.add_argument('--save_dir', default='checkpoints/textRNN_GRU_reg',
                                help='save base dir')
     path_settings.add_argument('--log_path',
                                help='path of the log file. If not set, logs are printed to console')

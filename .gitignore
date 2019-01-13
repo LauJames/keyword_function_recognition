@@ -15,3 +15,4 @@ gen
 !/data/data_loader.py
 /tensorboard_dir/
 /checkpoints/
+!/data/data_loader_sp.py
