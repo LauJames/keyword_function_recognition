@@ -44,8 +44,8 @@ def parse_args():
     train_settings.add_argument('--optim', default='adam', help='optimizer type')
     train_settings.add_argument('--learning_rate', type=float, default=0.0008, help='optimizer type')
     train_settings.add_argument('--weight_dacay', type=float, default=0, help='weight decay')
-    train_settings.add_argument('--l2_reg_lambda', type=float, default=0.0, help='weight decay')
-    train_settings.add_argument('--dropout_keep_prob', type=float, default=0.6, help='dropout keep prob')
+    train_settings.add_argument('--l2_reg_lambda', type=float, default=0.09, help='weight decay')
+    train_settings.add_argument('--dropout_keep_prob', type=float, default=0.5, help='dropout keep prob')
     train_settings.add_argument('--batch_size', type=int, default=64, help='train batch size')
     train_settings.add_argument('--epochs', type=int, default=100, help='train epochs')
     train_settings.add_argument('--evaluate_every', type=int, default=100,
@@ -56,11 +56,11 @@ def parse_args():
                                 help='number of checkpoints to store')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--embedding_dim', type=int, default=256,
+    model_settings.add_argument('--embedding_dim', type=int, default=300,
                                 help='size of the embeddings')
     model_settings.add_argument('--filter_sizes', type=str, default="3,4,5",
                                 help='comma split filter sizes')
-    model_settings.add_argument('--num_filters', type=int, default=128,
+    model_settings.add_argument('--num_filters', type=int, default=512,
                                 help='CNN filter nums')
     model_settings.add_argument('--max_x_len', type=int, default=215,
                                 help='max length of question')
@@ -211,16 +211,17 @@ def train():
 
     # Create Session
     # Create Session
-    gpu_options = tf.GPUOptions(
-        per_process_gpu_memory_fraction=0.5,
-        allow_growth=True
-    )
-    session_config = tf.ConfigProto(
-        allow_soft_placement=args.allow_soft_placement,
-        log_device_placement=args.log_device_placement,
-        gpu_options=gpu_options
-    )
-    session = tf.Session(config=session_config)
+    # gpu_options = tf.GPUOptions(
+    #     per_process_gpu_memory_fraction=0.7,
+    #     allow_growth=True
+    # )
+    # session_config = tf.ConfigProto(
+    #     allow_soft_placement=args.allow_soft_placement,
+    #     log_device_placement=args.log_device_placement,
+    #     gpu_options=gpu_options
+    # )
+    # session = tf.Session(config=session_config)
+    session = tf.Session()
     session.run(tf.global_variables_initializer())
     writer.add_graph(session.graph)
 
@@ -290,7 +291,8 @@ def predict():
         filter_sizes=list(map(int, args.filter_sizes.split(","))),
         num_filters=args.num_filters,
         l2_reg_lambda=args.l2_reg_lambda,
-        learning_rate=args.learning_rate
+        learning_rate=args.learning_rate,
+        is_training=False
     )
 
     session = tf.Session()

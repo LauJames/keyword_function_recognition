@@ -39,10 +39,10 @@ def parse_args():
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
 
     train_settings = parser.add_argument_group('train settings')
-    train_settings.add_argument('--dev_sample_percentage', type=float, default=0.1,
+    train_settings.add_argument('--dev_sample_percentage', type=float, default=0.05,
                                 help='percentage of the training data to use for validation')
     train_settings.add_argument('--optim', default='adam', help='optimizer type')
-    train_settings.add_argument('--learning_rate', type=float, default=0.0008, help='optimizer type')
+    train_settings.add_argument('--learning_rate', type=float, default=0.0003, help='optimizer type')
     train_settings.add_argument('--weight_dacay', type=float, default=0, help='weight decay')
     train_settings.add_argument('--dropout_keep_prob', type=float, default=0.6, help='dropout keep prob')
     train_settings.add_argument('--batch_size', type=int, default=64, help='train batch size')
