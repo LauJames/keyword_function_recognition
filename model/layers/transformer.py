@@ -15,6 +15,7 @@
 
 
 import tensorflow as tf
+import tensorflow.contrib as tc
 import numpy as np
 
 
@@ -52,28 +53,32 @@ def postitional_encoding(inputs,
                          scope="positional_encoding",
                          reuse=None):
     """
-    Positional encoding.
+    Positional encoding. Construct a position embedding lookup table and lookup according to the inputs (position index)
     :param inputs: Tensor. A 2D Tensor with shape of (N, T)
     :param num_units: Int. Decided the output dimensionality.
-    :param zero_pad:
-    :param scale:
-    :param scope:
-    :param reuse:
-    :return:
+    :param zero_pad: Boolean. If true, all the values of the first row (id = 0) should be constant zero.
+    :param scale: Boolean. If true, the output will be multiplied by sqrt num_units (check details from paper)
+    :param scope: String. Optional scope for 'variable_scope'.
+    :param reuse: Boolean. Whether to reuse the weights of a previous layer by the same name.
+    :return: Lookuped Position embeddings.
     """
     N, T = inputs.get_shape().as_list()
-    with tf.variable_scope(scope, reuse=True):
+    with tf.variable_scope(scope, reuse=reuse):
         position_index = tf.tile(tf.expand_dims(tf.range(T), 0), [N, 1])
 
         # First part of the PE function: sin and cos argument
         # Github issue has correct the wrong implementation of position encode.
         # position_enc = np.array([[pos / np.power(10000, 2.*i/num_units) for i in range(num_units)]
         #                           for pos in range(T)])
-        position_enc = np.array([[pos / np.power(10000, (i - i % 2)) for i in range(num_units)]
+
+        # In the paper, section 3.5, the embedding (before the application of sine or cosine)
+        # for even positions in [0..num_units] indexed by 2*i is the same as that for odd positions.
+        # take 2i as a whole part.
+        position_enc = np.array([[pos / np.power(10000, (i - i % 2)/num_units) for i in range(num_units)]
                                  for pos in range(T)])
 
         # Second part, apply the cosine to even columns and sin to odds.
-        position_enc[:, 0::2] = np.sin(position_enc[:, ::2])  # dim 2i
+        position_enc[:, 0::2] = np.sin(position_enc[:, 0::2])  # dim 2i
         position_enc[:, 1::2] = np.cos(position_enc[:, 1::2])  # dim 2i+1
 
         # Convert to a tensor
@@ -88,4 +93,94 @@ def postitional_encoding(inputs,
             outputs = outputs * num_units ** 0.5
 
         return outputs
+
+
+def multihead_attention(queries,
+                        keys,
+                        num_units=None,
+                        num_heads=8,
+                        dropout_rate=0,
+                        is_training=True,
+                        causality=False,
+                        scope="multihead_attention",
+                        reuse=None):
+    """
+    Applies multihead attention. N is the batch size, T is the Time length, C is the embedding dim.
+    :param queries: Tensor. A 3D tensor with shape of [N, T_q, C_q].
+    :param keys: Tensor. A 3D tensor with shape of [N, T_k, T_k].
+    :param num_units: Integer. A scalar represent attention size.
+    :param num_heads: Integer. Number of heads.
+    :param dropout_rate: Float.
+    :param is_training: Boolean. Controller of mechanism for dropout.
+    :param causality: Boolean. If true, units that reference the future are masked.
+    :param scope: Optional scope for 'variable_scope'.
+    :param reuse: Boolean, whether to reuse the weight of a previous layer by the same name.
+    :return: A 3D tensor with shape of (N, T_q, C)
+    """
+    with tf.variable_scope(scope, reuse=reuse):
+        # Set the fall back option for num_units
+        if num_units is None:
+            num_units = queries.get_shape().as_list[-1]
+
+        # Linear projections
+        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu)  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
+
+        # Split and concat
+        Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
+        K_ = tf.concat(tf.split(K, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
+        V_ = tf.concat(tf.split(V, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
+
+        # Batch Multiplication  (h*N, T_q, C/h) * (h*N, C/h, T_k) = (h*N, T_q, T_k)
+        # (Dot product in math concept, in Paper 3.2.1 and 3.2.2)
+        outputs = tf.matmul(Q_, tf.transpose(K_, [0, 2, 1]))
+
+        # Scale
+        outputs = outputs / (K_.get_shape().as_list()[-1] ** 0.5)  # divided sqrt(K_ dimension)
+
+        # Key masking
+        key_masks = tf.sign(tf.abs(tf.reduce_sum(keys, axis=-1)))  # (N, T_k)
+        key_masks = tf.tile(key_masks, [num_heads, 1])  # (h*N, T_k)
+        key_masks = tf.tile(tf.expand_dims(key_masks, 1), [1, tf.shape(queries)[1], 1])  # (h*N, T_q, T_k)
+
+        paddings = tf.ones_like(outputs)*(-2**32+1)
+        outputs = tf.where(tf.equal(key_masks, 0), paddings, outputs)
+
+        # Causality = Future blinding
+        if causality:
+            diag_vals = tf.ones_like(outputs[0, :, :])  # (T_q, T_k)
+            tril = tc.linalg.LinearOperatorLowerTriangular(diag_vals).to_dense()  # (T_q, T_k)
+            masks = tf.tile(tf.expand_dims(tril, 0), [tf.shape(outputs)[0], 1, 1])  # (h*N, T_q, T_k)
+
+            paddings = tf.ones_like(masks)*(-2**32+1)
+            outputs = tf.where(tf.equal(masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
+
+        # Activation
+        outputs = tf.nn.softmax(outputs)  # (h*N, T_q, T_k)
+
+        # Query Masking
+        query_masks = tf.sign(tf.abs(tf.reduce_mean(queries, axis=-1)))  # (N, T_q)
+        query_masks = tf.tile(query_masks, [num_heads, 1])  # (h*N, T_q)
+        query_masks = tf.tile(tf.expand_dims(query_masks, -1), [1, 1, tf.shape(keys)[1]])  # (h*N, T_q, T_k)
+
+        # Broadcasting. (N, T_q, C)
+        outputs *= query_masks
+
+        # Dropouts
+        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(is_training))
+
+        # Weighted sum
+        outputs = tf.matmul(outputs, V_)  # (h*N, T_q, C/h)
+
+        # Restore shape
+        outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
+
+        # Residual connection
+        outputs += queries
+
+        # Normalize
+        outputs = layer_normalize(outputs)  # (N, T_q, C)
+
+    return outputs
 
