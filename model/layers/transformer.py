@@ -139,9 +139,10 @@ def multihead_attention(queries,
         # Scale
         outputs = outputs / (K_.get_shape().as_list()[-1] ** 0.5)  # divided sqrt(K_ dimension)
 
-        # Key masking
-        key_masks = tf.sign(tf.abs(tf.reduce_sum(keys, axis=-1)))  # (N, T_k)
-        key_masks = tf.tile(key_masks, [num_heads, 1])  # (h*N, T_k)
+        # Key masking (Remains problems. Position embeddings make keys and queries not zero.)
+        key_masks = tf.sign(tf.abs(tf.reduce_sum(keys, axis=-1)))  # (N, T_k)  embedding sum ==0 --> 0
+        key_masks = tf.tile(key_masks, [num_heads, 1])  # (h*N, T_k)  tile for multihead
+        # expand and tile for queries
         key_masks = tf.tile(tf.expand_dims(key_masks, 1), [1, tf.shape(queries)[1], 1])  # (h*N, T_q, T_k)
 
         paddings = tf.ones_like(outputs)*(-2**32+1)
@@ -164,7 +165,7 @@ def multihead_attention(queries,
         query_masks = tf.tile(query_masks, [num_heads, 1])  # (h*N, T_q)
         query_masks = tf.tile(tf.expand_dims(query_masks, -1), [1, 1, tf.shape(keys)[1]])  # (h*N, T_q, T_k)
 
-        # Broadcasting. (N, T_q, C)
+        # Broadcasting. (h*N, T_q, T_k)
         outputs *= query_masks
 
         # Dropouts
@@ -184,3 +185,80 @@ def multihead_attention(queries,
 
     return outputs
 
+
+def feedforward(inputs,
+                num_units=[2048, 512],
+                scope="multihead_attention",
+                reuse=None):
+    """
+    Paper 3.3 Point-wise Feed-Forward Networks.
+    Way1: Two linear transformations with a ReLU activation in between.
+    Way2: Two convolutions with kernel size 1. (Here we implemented.)
+    :param inputs: Tensor. A 3D tensor with shape of [N, T, C].
+    :param num_units: List. A list of two integers.
+    :param scope: String. Optional scope for 'variable_scope'.
+    :param reuse: Boolean. Whether to reuse the weights of a previous layer by the name.
+    :return: Tensor. A 3D tensor with the same shape and dtype as inputs.
+    """
+    with tf.variable_scope(scope, reuse=reuse):
+        # Inner layer
+        params = {"inputs": inputs,
+                  "filters": num_units[0],
+                  "kernel_size": 1,
+                  "activation": tf.nn.relu,
+                  "use_bias": True}
+
+        outputs = tf.layers.conv1d(**params)
+
+        # Readout layer
+        params = {"inputs": outputs,
+                  "filters": num_units[1],
+                  "kernel_size": 1,
+                  "activation": None,
+                  "use_bias": True}
+
+        outputs = tf.layers.conv1d(**params)
+
+        # Residual connection
+        outputs += inputs
+
+        # Normalize
+        outputs = layer_normalize(outputs)
+
+    return outputs
+
+
+def label_smoothing(inputs, epsilon=0.1):
+    """
+    Applies labels smoothing. See https://arxiv.org/abs/1512.00567.
+    :param inputs: Tensor. A 3D tensor with shape of [N, T, V], where V is the number of vocabulary.
+    :param epsilon: Float. Smoothing rate.
+    :return: Tensor. Same dimension as inputs.
+
+    For example,
+
+    ```
+    import tensorflow as tf
+    inputs = tf.convert_to_tensor([[[0, 0, 1],
+       [0, 1, 0],
+       [1, 0, 0]],
+      [[1, 0, 0],
+       [1, 0, 0],
+       [0, 1, 0]]], tf.float32)
+
+    outputs = label_smoothing(inputs)
+
+    with tf.Session() as sess:
+        print(sess.run([outputs]))
+
+    >>
+    [array([[[ 0.03333334,  0.03333334,  0.93333334],
+        [ 0.03333334,  0.93333334,  0.03333334],
+        [ 0.93333334,  0.03333334,  0.03333334]],
+       [[ 0.93333334,  0.03333334,  0.03333334],
+        [ 0.93333334,  0.03333334,  0.03333334],
+        [ 0.03333334,  0.93333334,  0.03333334]]], dtype=float32)]
+    ```
+    """
+    K = inputs.get_shape().as_list()[-1]  # Number of channels
+    return ((1 - epsilon) * inputs) + (epsilon / K)
