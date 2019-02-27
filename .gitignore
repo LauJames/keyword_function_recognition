@@ -16,3 +16,4 @@ gen
 /tensorboard_dir/
 /checkpoints/
 !/data/data_loader_sp.py
+!/data/get_keyword_dict.py

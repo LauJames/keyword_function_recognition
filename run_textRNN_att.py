@@ -56,15 +56,15 @@ def parse_args():
                                 help='number of checkpoints to store')
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--rnn_type', choices=['lstm', 'gru', 'rnn'], default='gru',
+    model_settings.add_argument('--rnn_type', choices=['lstm', 'gru', 'rnn', 'bigru'], default='bigru',
                                 help='choose the algorithm to use')
     model_settings.add_argument('--embedding_dim', type=int, default=300,
                                 help='size of the embeddings')
-    model_settings.add_argument('--hidden_size', type=int, default=128,
+    model_settings.add_argument('--hidden_size', type=int, default=512,
                                 help='size of rnn hidden units')
     model_settings.add_argument('--num_layers', type=int, default=2,
                                 help='RNN layer num')
-    model_settings.add_argument('--attention_size', type=int, default=256,
+    model_settings.add_argument('--attention_size', type=int, default=512,
                                 help='Attention size')
     model_settings.add_argument('--max_x_len', type=int, default=215,
                                 help='max length of question')
@@ -82,9 +82,9 @@ def parse_args():
                                help='list of files that contain the pkl data')
     # path_settings.add_argument('--test_data_files',
     #                            default='./data/testset.txt')
-    path_settings.add_argument('--tensorboard_dir', default='tensorboard_dir/textRNN_GRU_att',
+    path_settings.add_argument('--tensorboard_dir', default='tensorboard_dir/textRNN_BiGRU_att',
                                help='saving path of tensorboard')
-    path_settings.add_argument('--save_dir', default='checkpoints/textRNN_GRU_att',
+    path_settings.add_argument('--save_dir', default='checkpoints/textRNN_BiGRU_att',
                                help='save base dir')
     path_settings.add_argument('--log_path',
                                help='path of the log file. If not set, logs are printed to console')

@@ -32,7 +32,7 @@ class Vocab(object):
         self.unk_token = '<unk>'
 
         self.initial_tokens = initial_tokens if initial_tokens is not None else []
-        self.initial_tokens.extend([self.pad, self.unk_token])
+        self.initial_tokens.extend([self.pad_token, self.unk_token])
         for token in self.initial_tokens:
             self.add(token)
 
@@ -42,7 +42,7 @@ class Vocab(object):
     def size(self):
         """
         Get the size of vocabulary.
-        :return: Int   An interger indicating the size.
+        :return: Int   An integer indicating the size.
         """
         return len(self.id2token)
 
@@ -60,7 +60,7 @@ class Vocab(object):
         """
         Gets the id of a token, returns the id of unk token if token id not in vocab.
         :param token: str   a string indicating the word
-        :return: Int   An interger
+        :return: Int   An integer
         """
         token = token.lower() if self.lower else token
         try:
@@ -72,13 +72,13 @@ class Vocab(object):
     def get_token(self, idx):
         """
         Gets the token corresponding to idx, returns unk token id idx is not in vocab
-        :param idx: int an interger
+        :param idx: int an integer
         :return: token: str  a token string
         """
         try:
             return self.id2token[idx]
         except KeyError as e:
-            print("Unknow index")
+            print("Unknown index")
             return self.unk_token
 
     def add(self, token, cnt=1):
@@ -131,8 +131,8 @@ class Vocab(object):
 
     def load_pretrained_embeddings(self, embedding_path):
         """
-        Load the pretrained word embeddings from embedding_path.
-        Reconstructed the token2id and id2token dict. Tokens not in pretrained embeddings will be filtered.
+        Load the pre-trained word embeddings from embedding_path.
+        Reconstructed the token2id and id2token dict. Tokens not in pre-trained embeddings will be filtered.
         :param embedding_path: str
         :return: None
         """
@@ -141,7 +141,7 @@ class Vocab(object):
             while True:
                 line = fin.readline()
                 if not line:
-                    print("Pretrained embeddings load successfully!")
+                    print("Pre-trained embeddings load successfully!")
                     break
                 contents = line.strip().split(' ')
                 token = contents[0]
