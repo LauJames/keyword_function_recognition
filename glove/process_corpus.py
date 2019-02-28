@@ -78,7 +78,20 @@ def load_corpus(corpus_path):
                 break
             for line in lines:
                 corpus_list.append(line)
+    return corpus_list
+
+
+def split_doc2words(docs):
+    sentence_list = []
+    for doc in docs:
+        document = nlp(document)
+        for sent in document.sents:
+            sentence_list.append(sent)
+    for sentence in sentence_list:
+        one_sent = nlp(sentence)
+        one_sent = ' '.join(temp.token for temp in one_sent.tokens)
 
 
 if __name__ == '__main__':
-    load_corpus(untoken_corpus_path)
+    corpus = load_corpus(untoken_corpus_path)
+
