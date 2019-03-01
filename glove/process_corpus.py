@@ -22,7 +22,7 @@ import re
 from nltk.stem.porter import *
 
 curdir = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
-os.path.insert(0, curdir)
+sys.path.insert(0, curdir)
 
 untoken_corpus_path = curdir + '/csCorpusSampled.txt'
 
@@ -69,7 +69,7 @@ def clean_title(document):
     return document
 
 
-def load_corpus(corpus_path):
+def load_corpus(corpus_path, docs_path):
     corpus_list = []
     with open(corpus_path, 'r', encoding='utf8') as fin:
         while True:
@@ -78,18 +78,33 @@ def load_corpus(corpus_path):
                 break
             for line in lines:
                 corpus_list.append(line)
-    return corpus_list
-
-
-def split_doc2words(docs):
     sentence_list = []
-    for doc in docs:
-        document = nlp(document)
-        for sent in document.sents:
+    for doc in corpus_list:
+        doc = nlp(doc)
+        for sent in doc.sents:
             sentence_list.append(sent)
-    for sentence in sentence_list:
-        one_sent = nlp(sentence)
-        one_sent = ' '.join(temp.token for temp in one_sent.tokens)
+    del corpus_list
+    with open(docs_path, 'w', encoding='utf8') as fout:
+        for sent in sentence_list:
+            fout.write(sent + '\n')
+
+
+def split_sent2words(sents_path, split_path):
+    docs_split = []
+    with open(sents_path, 'r', encoding='utf8') as fin:
+        while True:
+            lines = fin.readlines(100000)
+            if not lines:
+                break
+            for line in lines:
+                line = str(line)
+                one_sent = nlp(line)
+                sent_blank_split = ' '.join([tmp.text for tmp in one_sent])
+                docs_split.append(sent_blank_split)
+
+    with open(split_path, 'w+', encoding='utf8') as fout:
+        for doc_split in docs_split:
+            fout.write(doc_split + '\n')
 
 
 if __name__ == '__main__':
