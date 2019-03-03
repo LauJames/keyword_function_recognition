@@ -21,24 +21,23 @@ import numpy as np
 
 def layer_normalize(inputs,
                     epsilon=1e-8,
-                    scope="ln",
-                    reuse=None):
+                    scope="ln"):
     """
+    Reference: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/layers/python/layers/layers.py
     Applies layer normalization.
     :param inputs: A tensor with 2 or more dimensions, where the first dimension has`batch_size`.
     :param epsilon: A floating number. A very small number for preventing ZeroDivision Error.
     :param scope:  Optional scope for `variable_scope`.
-    :param reuse: Boolean, whether to reuse the weights of a previous layer by the same name.
     :return: A tensor with the same shape and data dtype as `inputs`.
     """
-    with tf.variable_scope(scope, reuse=reuse):
+    with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
         inputs_shape = inputs.get_shape()
         params_shape = inputs_shape[-1:]
 
         mean, variance = tf.nn.moments(inputs, [-1], keep_dims=True)  # Batch Normalization use 0
 
-        beta = tf.Variable(tf.zeros(params_shape))
-        gamma = tf.Variable(tf.ones(params_shape))
+        beta = tf.get_variable(initializer=tf.zeros_initializer(), shape=params_shape, name='beta')
+        gamma = tf.get_variable(initializer=tf.zeros_initializer(), shape=params_shape, name='gamma')
 
         normalized = (inputs - mean) / ((variance + epsilon) ** 0.5)
         outputs = gamma * normalized + beta

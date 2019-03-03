@@ -42,7 +42,7 @@ def conv_layer(inputs, filter_shape, is_training=False):
     layer = tf.nn.conv2d(inputs,
                          W,
                          strides=[1, 1, 1, 1],
-                         padding='VALID')
+                         padding='VALID')  # (N, H, W, C)
 
     gamma = tf.Variable(tf.ones([num_filters]))
     beta = tf.Variable(tf.zeros([num_filters]))
